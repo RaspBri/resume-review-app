@@ -3,8 +3,11 @@
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import os, sys
+import os, sys, threading
 from werkzeug.utils import secure_filename
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import main
 
 app = Flask(__name__)
 # CORS(app) # get requests from React frontend
@@ -24,12 +27,6 @@ def add_cors_headers(response):
 def after_request(response):
     return add_cors_headers(response)
 
-# Catch all OPTIONS preflight requests
-@app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
-@app.route('/<path:path>', methods=['OPTIONS'])
-def options_preflight(path):
-    response = make_response()
-    return add_cors_headers(response)
 
 # TODO: Make constants file 
 # TODO: Make the resources upload directory temporary, need to rename to temp
@@ -54,8 +51,12 @@ def upload():
         filepath = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(filepath)
 
-        return jsonify({'message': 'File uploaded successfully', 'filename': file.filename})
+        response = jsonify({'message': 'File uploaded successfully', 'filename': file.filename})
 
+        threading.Thread(target=main.extract_text_from_pdf((filepath)), args=((filepath + '/' + filename))).start()
+        
+        return response
+    
     except Exception as e:
             print('Error:', e)
             return jsonify({'error': 'Server error'}), 500
