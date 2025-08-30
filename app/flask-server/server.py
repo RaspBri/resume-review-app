@@ -39,28 +39,49 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # TODO: Set file size limit, prevent DDOS attack of app
 
 # Upload File API route
-@app.route('/upload', methods=['POST'])
-def upload():
+@app.route('/upload-resume', methods=['POST'])
+def uploadResume():
     try: 
         if 'file' not in request.files:
             return jsonify({'error': 'No file uploaded'}), 400
         
         file = request.files['file']
         filename = secure_filename(file.filename)
-
         filepath = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(filepath)
 
         response = jsonify({'message': 'File uploaded successfully', 'filename': file.filename})
-
-        threading.Thread(target=main.extract_text_from_pdf((filepath)), args=((filepath + '/' + filename))).start()
-        
+        threading.Thread(target=main.extract_text_from_pdf(filepath), args=((filepath + '/' + filename))).start()
         return response
-    
+
     except Exception as e:
             print('Error:', e)
             return jsonify({'error': 'Server error'}), 500
 
+
+# Upload Job Posting URL
+@app.route('/upload-job', methods=['POST'])
+def uploadJob():
+    try:
+        data = request.get_json()
+        url = None
+
+        if data and 'url' in data:
+            url = data['url']
+        elif 'url' in request.form:
+            url = request.form['url']
+
+        if not url:
+            return jsonify({'error': 'No URL provided'}), 400
+        
+        response = jsonify({'message': 'URL received', 'url': url})
+        threading.Thread(target=main.extract_text_from_url, args=(url,)).start()
+
+        return response
+
+    except Exception as e:
+            print('Error:', e)
+            return jsonify({'error': 'Server error'}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
