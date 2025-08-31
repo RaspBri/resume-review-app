@@ -1,64 +1,78 @@
-import React, {useState} from 'react'
-// useState - create state variable that holds data retrieved from backend
-// useEffect - fetches backend API on first render
+import React, { useState } from 'react';
+import { Container, Typography, Button, Box, CircularProgress } from '@mui/material';
+import UploadPDF from './components/UploadPDF';
+import UploadJobDescription from './components/UploadJobDescription';
+import Results from './components/Results';
+import UploadJobTitle from './components/UploadJobTitle.js';
 
 function App() {
+  const [file, setFile] = useState(null);
+  const [jobDescription, setJobDescription] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState(null);
 
-  const [selectedFile, setSelectedFile] = useState(null)
-
-  // Get uploaded file
-  const handleFileChange = (event) => {
-    setSelectedFile(event.target.files[0]);
+  const cleanText = (text) => {
+    if (typeof text !== 'string') return '';
+    return text
+      .split('\n')                      
+      .map(line => line.trim())          
+      .filter(line => line.length > 0)  
+      .join('\n');   
   }
-
-  const handleUpload = () => {
-    if (!selectedFile){
-      alert('No File Selected!')
+    
+  const handleSubmit = async () => {
+    if (!file || !jobDescription || !jobTitle) {
+      alert("Please upload a resume and enter job details.");
       return;
     }
-  
 
-  const formData = new FormData() 
-  formData.append('file', selectedFile) // Append formData object with file
+    const cleanedJobDes = cleanText(jobDescription)
 
-  fetch('http://localhost:5001/upload', {
-    method: 'POST',
-    body: formData,
-    mode: 'cors',
-    })
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP error! ${response.status}`);
-          return response.json()
-      })
-      .then((data) => {
-        alert('Upload Successful!')
-        console.log('Server Response: ', data)
-      })
-      .catch(async (error) => {
-        console.error('Upload Failed', error)
-        alert('Upload Failed')
-      })
+    setLoading(true);
 
-  }
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('job_description', cleanedJobDes);
+    formData.append('job_title', jobTitle)
+
+    try {
+      const response = await fetch('http://localhost:5001/upload', {
+        method: 'POST',
+        body: formData,
+        mode: 'cors'
+      });
+
+      const data = await response.json();
+      console.log("API Response:", data);
+      setResults(data);
+    } catch (error) {
+        console.error("Error", error);
+        alert("Error processing request.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+// TODO: Show in small window pdf file at the top
 
   return (
-    <div>
-      <h2>Upload a File</h2>
+    <Container maxWidth="md" sx={{ mt: 5 }}>
+      <Typography variant="h4" gutterBottom>Resume Analyzer</Typography>
 
-      {/* Take in uploaded file */}
-      <input type="file" accept="application/pdf" onChange={handleFileChange} />
-      
-      <button onClick={handleUpload} style={{ marginLeft: '10px' }}>
-        Upload
-      </button>
+      <UploadPDF file={file} setFile={setFile} />
+      <UploadJobTitle jobTitle={jobTitle} setJobTitle={setJobTitle}  />
+      <UploadJobDescription jobDescription={jobDescription} setJobDescription={setJobDescription} />
 
-      {selectedFile && (
-        <div style={{ marginTop: '10px' }}>
-          <strong>Selected file:</strong> {selectedFile.name}
-        </div>
-      )}
-    </div>
-  )
+      <Box sx={{ my: 2 }}>
+        <Button variant="contained" onClick={handleSubmit} disabled={loading}>
+          {loading ? <CircularProgress size={24} /> : 'Analyze'}
+        </Button>
+      </Box>
+
+      {results && <Results data={results} />}
+    </Container>
+  );
 }
 
-export default App
+export default App;
