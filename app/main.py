@@ -88,8 +88,6 @@ def calculate_applicant_resume_match(resume_text, job_keywords):
     match_score = round(len(matches) / len(job_keywords), 2)
 
     return match_score, unmatched
-    
-import re
 
 def extract_keywords(text):
     doc = nlp(text)
@@ -100,6 +98,7 @@ def extract_keywords(text):
         for token in doc
         if token.pos_ in {"NOUN", "PROPN"} and token.text.lower() not in nlp.Defaults.stop_words and token.is_alpha
     ]
+
     for kw in filtered_keywords:
         if is_valid_keyword(kw):
             keywords.add(kw)
