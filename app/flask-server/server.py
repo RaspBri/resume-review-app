@@ -48,16 +48,25 @@ def upload():
         file = request.files['file']
         job_description = request.form.get('job_description')
         job_title = request.form.get('job_title')
+        omit_words = request.form.get('omit_words')
 
         if not job_description:
              return jsonify({'error': 'No job desciption provided.'})
 
         filename = secure_filename(file.filename)
-        filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+        for filename in os.listdir(UPLOAD_FOLDER):
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            if os.path.isfile(UPLOAD_FOLDER):
+                os.remove(UPLOAD_FOLDER)
+
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
 
         # results = threading.Thread(target=main.process_resume_and_job, args=((filepath + '/' + filename), job_description, job_title)).start()
-        results = main.process_resume_and_job((filepath + '/' + filename), job_description, job_title)
+        results = main.process_resume_and_job((filepath + '/' + filename), job_description, job_title, omit_words)
 
         response = jsonify({'message': 'File and job description recieved successfully', 'filename': file.filename})
         return jsonify(results)
