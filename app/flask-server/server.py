@@ -27,7 +27,6 @@ def add_cors_headers(response):
 def after_request(response):
     return add_cors_headers(response)
 
-
 # TODO: Make constants file 
 # TODO: Make the resources upload directory temporary, need to rename to temp
 
@@ -74,7 +73,6 @@ def upload():
     except Exception as e:
             print('Error:', e)
             return jsonify({'error': 'Server error'}), 500
-
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
