@@ -15,3 +15,9 @@ NLP - similarity score vs keyword matching
 Adding Gemini AI for career advice in the end
 
 Keeping secrets secrets, aka AWS Secrets Manager
+
+pip freeze > requirements.txt # Command to list all the dependencies required for the Python project
+pip install -r requirements.txt # Install all dependencies from req.txt
+
+After updating a file
+Frontend run "npm run build" -> docker compose build --no-cache -> docker compose up -d

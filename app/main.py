@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from sentence_transformers import SentenceTransformer, util
 from google import genai
 from dotenv import load_dotenv
+from transformers import pipeline
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 base_dir = os.path.abspath(os.path.join(CURRENT_DIR, '..'))
@@ -15,6 +16,9 @@ load_dotenv()
 nlp = spacy.load("en_core_web_lg") 
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
+token_skill_classifier = pipeline(model="jjzha/jobbert_skill_extraction", aggregation_strategy="first")
+token_knowledge_classifier = pipeline(model="jjzha/jobbert_knowledge_extraction", aggregation_strategy="first")
+
 BLACKLIST = {
     "experience", "understanding", "record", "tools", "field", "degree",
     "track", "team", "teams", "hands", "ability", "background", "mindset",
@@ -23,7 +27,7 @@ BLACKLIST = {
     "bachelor", "software", "frameworks", "design", "issues", "patients",
     "preferred years", "years", "communication", "leadership", "problem",
     "management", "methodologies", "other", "the", "they", "proper", "rate",
-    "learning", 
+    "learning", "attention to detail"
 }
 
 def get_similarity(text1, text2):
@@ -87,36 +91,45 @@ def calculate_applicant_resume_match(resume_text, job_keywords):
         return 0.0
     match_score = round(len(matches) / len(job_keywords), 2)
 
-    return match_score, unmatched
+    return match_score, unmatched, matches
+
+def aggregate_span(results):
+    new_results = []
+    current_result = results[0]
+
+    for result in results[1:]:
+        if result['start'] == current_result['end'] + 1:
+            current_result['word'] += ' ' + result['word']
+            current_result['end'] = result['end']
+        else:
+            new_results.append(current_result)
+            current_result = result
+    
+    new_results.append(current_result)
+
+    return new_results
 
 def extract_keywords(text):
-    doc = nlp(text)
-    keywords = set()
 
-    filtered_keywords = [
-        token.text.lower()
-        for token in doc
-        if token.pos_ in {"NOUN", "PROPN"} and token.text.lower() not in nlp.Defaults.stop_words and token.is_alpha
-    ]
+    output_skills = token_skill_classifier(text)
+    for result in output_skills:
+        if result.get('entity_group'):
+            result['entity'] = 'Skill'
+            del result['entity_group']
+    
+    output_knowledge = token_knowledge_classifier(text)
+    for result in output_knowledge:
+        if result in output_skills:
+            if result.get('entity_group'):
+                result['entity'] = 'Knowledge'
+                del result['entity_group']
 
-    for kw in filtered_keywords:
-        if is_valid_keyword(kw):
-            keywords.add(kw)
-
-    for chunk in doc.noun_chunks:
-        phrase = chunk.text.strip().lower()
-        if 1 < len(phrase) < 50 and is_valid_keyword(phrase):
-            keywords.add(phrase)
-
-    split_keywords = set()
-    for kw in keywords:
-        parts = re.split(r'[,/]| and |\s+', kw)
-        parts = [p.strip() for p in parts if p.strip() != '']
-        for part in parts:
-            if is_valid_keyword(part):
-                split_keywords.add(part)
-
-    return split_keywords
+    if len(output_skills) > 0:
+        output_skills = aggregate_span(output_skills)
+    if len(output_knowledge) > 0:
+        output_knowledge = aggregate_span(output_knowledge)
+    
+    return {'text': text, 'entities': output_skills}, {'text': text, 'entities': output_knowledge}
 
 def get_contextual_info(text):
     doc = nlp(text)
@@ -153,17 +166,69 @@ def applicant_advice(keyword_score, unmatched_kw, job_title, similarity_score):
         
     return ai_response, similarity_score_note
 
-def process_resume_and_job(file_pdf, job_description, job_title):
-    print(file_pdf)
-    print(job_description)
-    pdf_path = Path(UPLOAD_FOLDER)
-    resume_pdf = (os.listdir(pdf_path))[1]
-    resume_text = extract_text_from_pdf(str(UPLOAD_FOLDER + '/' + resume_pdf))
-    # job_title, job_description_and_skills = get_job_info()
-    job_description_and_skills = job_description
+def clean_keywords(keywords):
+    cleaned_keywords = []
+    for kw in keywords:
+        kw = kw.lower().strip()
 
-    job_skills_keywords = extract_keywords(job_description_and_skills)
-    keyword_score, unmatched_words = calculate_applicant_resume_match(resume_text, job_skills_keywords)
+        # Remove unwanted characters: keep +, #, /, and .
+        kw = re.sub(r'[()\[\]]', '', kw)  
+        kw = kw.replace('\\', '/')       
+        kw = re.sub(r'\s*/\s*', '/', kw)  
+
+        parts = re.split(r'[,\n;]|(?<!\w)(?:and|or)(?!\w)|\s{2,}', kw)
+
+        for part in parts:
+            part = part.strip()
+
+            if len(part.split()) > 3:
+                sub_parts = part.split()
+            else:
+                sub_parts = [part]
+
+            for item in sub_parts:
+                item = item.strip().strip("()[]{}").strip()
+                item = re.sub(r'\s+', ' ', item) 
+
+                if item and is_valid_keyword(item):
+                    cleaned_keywords.append(item)
+
+    return cleaned_keywords
+
+def omit_unwanted_words(omit, words):
+    if not omit:
+        return words
+    
+    omit = [word.strip().lower() for word in omit.split(',') if word.strip()]
+
+    for omit_word in omit:
+        pattern = r'\b' + re.escape(omit_word.lower()) + r'\b'
+        words = re.sub(pattern, '', words, flags=re.IGNORECASE)
+
+    words = re.sub(r'\s+&\s+', ' ', words)             
+    words = re.sub(r'\s+&(?=\W|$)', ' ', words)      
+    words = re.sub(r'(?<=\W)&\s+', ' ', words)   
+    words = re.sub(r'\s+', ' ', words).strip()
+
+    return words
+
+def process_resume_and_job(file_pdf, job_description_and_skills, job_title, omit_words):
+    pdf_path = Path(UPLOAD_FOLDER)
+    resume_pdf = (os.listdir(pdf_path))[0]
+    resume_text = extract_text_from_pdf(str(UPLOAD_FOLDER + '/' + resume_pdf))
+   
+    if omit_words:
+        job_description_and_skills = omit_unwanted_words(omit_words, job_description_and_skills)
+
+    job_skills_dict, job_knowledge_dict = extract_keywords(job_description_and_skills)
+    skills_keywords = [entity['word'].lower() for entity in job_skills_dict['entities'] if is_valid_keyword(entity['word'])]
+    knowledge_keywords = [entity['word'].lower() for entity in job_knowledge_dict['entities'] if is_valid_keyword(entity['word'])]
+    
+    skills_keywords = clean_keywords(skills_keywords)
+    knowledge_keywords = clean_keywords(knowledge_keywords)
+    job_skills_keywords = skills_keywords + knowledge_keywords
+
+    keyword_score, unmatched_words, matched_keywords = calculate_applicant_resume_match(resume_text, job_skills_keywords)
     print('Applicant Keyword Match: % ' + str(keyword_score * 100))
 
     similarity_score = (get_similarity(resume_text, job_description_and_skills)) * 100
@@ -172,11 +237,9 @@ def process_resume_and_job(file_pdf, job_description, job_title):
     # ai_response, similarity_score_note = applicant_advice(keyword_score, unmatched_words, job_title, similarity_score)
 
     return {
-        'keyword_match': str(keyword_score * 100),
-        'resume_to_job_similarity': similarity_score,
-        'similarity_score_note': "similarity_score_note",
+        'keyword_match': int(keyword_score * 100),
+        'matching_keywords': matched_keywords,
         'missing_keywords': unmatched_words,
+        'resume_to_job_similarity': int(similarity_score),
         'upskilling_advice': "ai_response"
     }
-
-    

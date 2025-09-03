@@ -1,18 +1,16 @@
 # TODO: When going to PROD, be sure to switch to PROD server
 # https://stackoverflow.com/questions/51025893/flask-at-first-run-do-not-use-the-development-server-in-a-production-environmen
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
-import os, sys, threading
+import os, sys, threading, traceback
 from werkzeug.utils import secure_filename
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import main
 
 app = Flask(__name__)
-# CORS(app) # get requests from React frontend
-
-FRONTEND_URL = "http://localhost:3000"
+CORS(app, supports_credentials=True, origins="*") # get requests from React frontend
 
 def add_cors_headers(response):
     origin = request.headers.get('Origin')
@@ -25,6 +23,8 @@ def add_cors_headers(response):
 
 @app.after_request
 def after_request(response):
+    if response is None:
+        response = make_response('', 500)
     return add_cors_headers(response)
 
 # TODO: Make constants file 
@@ -37,9 +37,26 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # TODO: Set file size limit, prevent DDOS attack of app
 
+@app.errorhandler(404)
+def not_found(e):
+    return make_response(jsonify({'error': 'Not found'}), 404)
+
+@app.errorhandler(Exception)
+def handle_all_exceptions(e):
+    import traceback
+    traceback.print_exc()
+    return make_response(jsonify({'error': 'Internal server error'}), 500)
+
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
+
 # Upload File API route
-@app.route('/upload', methods=['POST'])
+@app.route('/upload', methods=['POST', 'OPTIONS'])
 def upload():
+    if request.method == 'OPTIONS':
+        return '', 204
+    print("[POST] Upload endpoint hit")
     try: 
         if 'file' not in request.files:
             return jsonify({'error': 'No file uploaded'}), 400
@@ -58,21 +75,20 @@ def upload():
 
         for filename in os.listdir(UPLOAD_FOLDER):
             filepath = os.path.join(UPLOAD_FOLDER, filename)
-            if os.path.isfile(UPLOAD_FOLDER):
-                os.remove(UPLOAD_FOLDER)
+            if os.path.isfile(filepath):
+                os.remove(filepath)
 
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
 
-        # results = threading.Thread(target=main.process_resume_and_job, args=((filepath + '/' + filename), job_description, job_title)).start()
-        results = main.process_resume_and_job((filepath + '/' + filename), job_description, job_title, omit_words)
+        results = main.process_resume_and_job(filepath, job_description, job_title, omit_words)
 
-        response = jsonify({'message': 'File and job description recieved successfully', 'filename': file.filename})
-        return jsonify(results)
+        return jsonify(results), 200
 
     except Exception as e:
             print('Error:', e)
-            return jsonify({'error': 'Server error'}), 500
+            traceback.print_exc()
+            return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(host="0.0.0.0", port=5001)
