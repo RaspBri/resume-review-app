@@ -1,0 +1,9 @@
+.top-color-band {
+  height: 20px; 
+  width: 100%;
+  background-color: rgb(56, 116, 203);
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 999; 
+}

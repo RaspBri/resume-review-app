@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "cors": "^2.8.5",
+    "react-pdfobject": "^1.2.0"
+  }
+}
