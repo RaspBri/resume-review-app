@@ -18,8 +18,8 @@ def add_cors_headers(response):
         response.headers['Access-Control-Allow-Origin'] = origin  # Adjust as needed
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept, X-Requested-With'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE'
-        # response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        # response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
         return response
 
 @app.after_request
@@ -53,11 +53,11 @@ def favicon():
     return '', 204
 
 # Upload File API route
-# @app.route('/upload', methods=['POST', 'OPTIONS'])
-@app.route('/upload', methods=['POST'])
+@app.route('/upload', methods=['POST', 'OPTIONS'])
+# @app.route('/upload', methods=['POST'])
 def upload():
-    # if request.method == 'OPTIONS':
-    #     return '', 204
+    if request.method == 'OPTIONS':
+        return '', 204
     print("[POST] Upload endpoint hit")
     try: 
         if 'file' not in request.files:
@@ -93,5 +93,5 @@ def upload():
             return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == "__main__":
-    # app.run(host="0.0.0.0", port=5001)
-    app.run(port=5001)
+    app.run(host="0.0.0.0", port=5001)
+    # app.run(port=5001)
