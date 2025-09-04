@@ -1,2 +1,28 @@
+# Ignore everything
+* 
+
+# Allow the following
+!app/
+!frontend/
+!resources/
+!docker-compose.yml
+!pyproject.toml
+!README.md
+
+.env
+terraform/
+tests/
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyc
+*.pyd
+*.pyo
+
+.vscode/
+.idea/
+
+.git/
 .gitignore
-node_modules

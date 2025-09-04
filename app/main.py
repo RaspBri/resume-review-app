@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from sentence_transformers import SentenceTransformer, util
 from google import genai
 from dotenv import load_dotenv
-from transformers import pipeline
+from transformers import AutoTokenizer, pipeline, AutoModelForTokenClassification
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 base_dir = os.path.abspath(os.path.join(CURRENT_DIR, '..'))
@@ -18,6 +18,14 @@ model = SentenceTransformer('all-MiniLM-L6-v2')
 
 token_skill_classifier = pipeline(model="jjzha/jobbert_skill_extraction", aggregation_strategy="first")
 token_knowledge_classifier = pipeline(model="jjzha/jobbert_knowledge_extraction", aggregation_strategy="first")
+
+# skill_tokenizer = AutoTokenizer.from_pretrained("jjzha/jobbert_skill_extraction")
+# skill_model = AutoModelForTokenClassification.from_pretrained("jjzha/jobbert_skill_extraction")
+# token_skill_classifier = pipeline("token-classification", model=skill_model, tokenizer=skill_tokenizer, aggregation_strategy="first", max_length=512)
+
+# knowledge_tokenizer = AutoTokenizer.from_pretrained("jjzha/jobbert_knowledge_extraction")
+# knowledge_model = AutoModelForTokenClassification.from_pretrained("jjzha/jobbert_knowledge_extraction")
+# token_knowledge_classifier = pipeline("token-classification", model=knowledge_model, tokenizer=knowledge_tokenizer, aggregation_strategy="first", max_length=512)
 
 BLACKLIST = {
     "experience", "understanding", "record", "tools", "field", "degree",
@@ -87,8 +95,10 @@ def calculate_applicant_resume_match(resume_text, job_keywords):
     resume_text = resume_text.lower()
     matches = [kw for kw in job_keywords if kw in resume_text]
     unmatched = [kw for kw in job_keywords if kw not in resume_text]
+    
     if not job_keywords:
-        return 0.0
+        return 0, [], []
+    
     match_score = round(len(matches) / len(job_keywords), 2)
 
     return match_score, unmatched, matches

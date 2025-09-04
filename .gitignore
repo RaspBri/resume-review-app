@@ -9,6 +9,28 @@ __pycache__/
 # C extensions
 *.so
 
+# Compiled files
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform.tfstate.lock.info
+
+*.tfvars
+*.tfvars.json
+
+crash.log
+crash.*.log
+
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Module directory
+.terraform/
+.terraformrc
+terraform.rc
+
 # Distribution / packaging
 .Python
 build/
